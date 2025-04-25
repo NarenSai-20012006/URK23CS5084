@@ -1,0 +1,241 @@
+package attendancesystemjava;
+
+import javax.swing.*;
+import java.awt.event.*;
+import java.sql.*;
+import java.util.*;
+
+public class attendance extends JFrame {
+    JTextField usernameField;
+    JPasswordField passwordField;
+    JButton loginButton;
+
+    static final String DB_URL = "jdbc:mysql://localhost:3306/attendance__db";
+    static final String DB_USER = "root";
+    static final String DB_PASS = "nasa@20012006";  // <- Replace with your MySQL password
+
+    Connection conn;
+
+    public attendance() {
+        setTitle("Login");
+        setSize(300, 150);
+        setLayout(null);
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+
+        JLabel userLabel = new JLabel("Username:");
+        userLabel.setBounds(10, 10, 80, 25);
+        add(userLabel);
+
+        usernameField = new JTextField();
+        usernameField.setBounds(100, 10, 160, 25);
+        add(usernameField);
+
+        JLabel passLabel = new JLabel("Password:");
+        passLabel.setBounds(10, 40, 80, 25);
+        add(passLabel);
+
+        passwordField = new JPasswordField();
+        passwordField.setBounds(100, 40, 160, 25);
+        add(passwordField);
+
+        loginButton = new JButton("Login");
+        loginButton.setBounds(100, 80, 80, 25);
+        add(loginButton);
+
+        loginButton.addActionListener(e -> checkLogin());
+
+        setVisible(true);
+    }
+
+    private void checkLogin() {
+        String username = usernameField.getText();
+        String password = String.valueOf(passwordField.getPassword());
+
+        try {
+            conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+            String query = "SELECT * FROM users WHERE username=? AND password=?";
+            PreparedStatement stmt = conn.prepareStatement(query);
+            stmt.setString(1, username);
+            stmt.setString(2, password);
+            ResultSet rs = stmt.executeQuery();
+
+            if (rs.next()) {
+                String role = rs.getString("role");
+                JOptionPane.showMessageDialog(this, "Login successful as " + role);
+                dispose();
+                if (role.equals("Admin")) showAdminPanel();
+                else if (role.equals("Faculty")) showFacultyPanel();
+                else showStudentPanel(username);
+            } else {
+                JOptionPane.showMessageDialog(this, "Invalid login.");
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    private void showAdminPanel() {
+        JFrame adminFrame = new JFrame("Admin Panel - Add Students");
+        adminFrame.setSize(400, 300);
+        adminFrame.setLayout(null);
+
+        JLabel nameLabel = new JLabel("Name:");
+        JTextField nameField = new JTextField();
+        JLabel rollLabel = new JLabel("Roll No:");
+        JTextField rollField = new JTextField();
+        JLabel classLabel = new JLabel("Class:");
+        JTextField classField = new JTextField();
+        JButton addButton = new JButton("Add Student");
+
+        nameLabel.setBounds(10, 20, 80, 25);
+        nameField.setBounds(100, 20, 200, 25);
+        rollLabel.setBounds(10, 60, 80, 25);
+        rollField.setBounds(100, 60, 200, 25);
+        classLabel.setBounds(10, 100, 80, 25);
+        classField.setBounds(100, 100, 200, 25);
+        addButton.setBounds(100, 150, 150, 30);
+
+        adminFrame.add(nameLabel);
+        adminFrame.add(nameField);
+        adminFrame.add(rollLabel);
+        adminFrame.add(rollField);
+        adminFrame.add(classLabel);
+        adminFrame.add(classField);
+        adminFrame.add(addButton);
+
+        addButton.addActionListener(e -> {
+            try {
+                String query = "INSERT INTO students(name, roll_no, class_name) VALUES (?, ?, ?)";
+                PreparedStatement stmt = conn.prepareStatement(query);
+                stmt.setString(1, nameField.getText());
+                stmt.setString(2, rollField.getText());
+                stmt.setString(3, classField.getText());
+                stmt.executeUpdate();
+                JOptionPane.showMessageDialog(adminFrame, "Student added.");
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
+
+        adminFrame.setVisible(true);
+    }
+
+    private void showFacultyPanel() {
+        JFrame facultyFrame = new JFrame("Faculty Panel - Mark Attendance");
+        facultyFrame.setSize(500, 500);
+        facultyFrame.setLayout(null);
+
+        JLabel classLabel = new JLabel("Class:");
+        JTextField classField = new JTextField();
+        JButton loadButton = new JButton("Load Students");
+        JButton markButton = new JButton("Mark Attendance");
+        JPanel checkboxPanel = new JPanel();
+        checkboxPanel.setLayout(new BoxLayout(checkboxPanel, BoxLayout.Y_AXIS));
+        JScrollPane scrollPane = new JScrollPane(checkboxPanel);
+        ArrayList<JCheckBox> studentCheckboxes = new ArrayList<>();
+
+        classLabel.setBounds(10, 10, 80, 25);
+        classField.setBounds(100, 10, 200, 25);
+        loadButton.setBounds(310, 10, 150, 25);
+        scrollPane.setBounds(10, 50, 460, 300);
+        markButton.setBounds(180, 360, 150, 30);
+
+        facultyFrame.add(classLabel);
+        facultyFrame.add(classField);
+        facultyFrame.add(loadButton);
+        facultyFrame.add(scrollPane);
+        facultyFrame.add(markButton);
+
+        loadButton.addActionListener(e -> {
+            studentCheckboxes.clear();
+            checkboxPanel.removeAll();
+            String className = classField.getText();
+            try {
+                String query = "SELECT * FROM students WHERE class_name=?";
+                PreparedStatement stmt = conn.prepareStatement(query);
+                stmt.setString(1, className);
+                ResultSet rs = stmt.executeQuery();
+                while (rs.next()) {
+                    JCheckBox cb = new JCheckBox(rs.getInt("id") + " - " + rs.getString("name"));
+                    cb.setSelected(true); // default to present
+                    studentCheckboxes.add(cb);
+                    checkboxPanel.add(cb);
+                }
+                checkboxPanel.revalidate();
+                checkboxPanel.repaint();
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
+
+        markButton.addActionListener(e -> {
+            String className = classField.getText();
+            java.sql.Date date = new java.sql.Date(System.currentTimeMillis());
+            for (JCheckBox cb : studentCheckboxes) {
+                String[] parts = cb.getText().split(" - ");
+                int id = Integer.parseInt(parts[0]);
+                String status = cb.isSelected() ? "Present" : "Absent";
+                try {
+                    String query = "INSERT INTO attendance(student_id, class_name, date, status) VALUES (?, ?, ?, ?)";
+                    PreparedStatement stmt = conn.prepareStatement(query);
+                    stmt.setInt(1, id);
+                    stmt.setString(2, className);
+                    stmt.setDate(3, date);
+                    stmt.setString(4, status);
+                    stmt.executeUpdate();
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+            JOptionPane.showMessageDialog(facultyFrame, "Attendance marked!");
+        });
+
+        facultyFrame.setVisible(true);
+    }
+
+    private void showStudentPanel(String username) {
+        JFrame studentFrame = new JFrame("Student Panel - My Attendance");
+        studentFrame.setSize(500, 400);
+        studentFrame.setLayout(null);
+
+        JTextArea area = new JTextArea();
+        area.setEditable(false);
+        JScrollPane scroll = new JScrollPane(area);
+        scroll.setBounds(10, 10, 460, 340);
+        studentFrame.add(scroll);
+
+        try {
+            String studentQuery = "SELECT id FROM users WHERE username=?";
+            PreparedStatement stmt1 = conn.prepareStatement(studentQuery);
+            stmt1.setString(1, username);
+            ResultSet userRs = stmt1.executeQuery();
+            int studentId = -1;
+            if (userRs.next()) studentId = userRs.getInt("id");
+
+            String query = "SELECT date, status FROM attendance WHERE student_id=?";
+            PreparedStatement stmt = conn.prepareStatement(query);
+            stmt.setInt(1, studentId);
+            ResultSet rs = stmt.executeQuery();
+
+            StringBuilder report = new StringBuilder("Date\t\tStatus\n");
+            while (rs.next()) {
+                report.append(rs.getDate("date")).append("\t").append(rs.getString("status")).append("\n");
+            }
+            area.setText(report.toString());
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        studentFrame.setVisible(true);
+    }
+
+    public static void main(String[] args) {
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        new attendance(); // Launch the login window
+    }
+}
