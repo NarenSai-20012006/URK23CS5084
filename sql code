@@ -1,0 +1,35 @@
+CREATE DATABASE attendance__db;
+USE attendance__db;
+
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50),
+    password VARCHAR(100),
+    role ENUM('Admin', 'Faculty', 'Student')
+);
+
+CREATE TABLE students (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100),
+    roll_no VARCHAR(50),
+    class_name VARCHAR(50)
+);
+
+CREATE TABLE attendance (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    student_id INT,
+    class_name VARCHAR(50),
+    date DATE,
+    status ENUM('Present', 'Absent'),
+    FOREIGN KEY (student_id) REFERENCES students(id)
+);
+INSERT INTO users(username, password, role) VALUES 
+('admin', 'admin123', 'Admin'),
+('faculty', 'faculty', 'Faculty'),
+('student', 'student', 'Student');
+-- Add student with roll_no same as student username
+INSERT INTO students (name, roll_no, class_name) 
+VALUES ('naren', '123', '12');
+
+select * from students;
+select * from attendance;
